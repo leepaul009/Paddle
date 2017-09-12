@@ -15,6 +15,8 @@ limitations under the License. */
 #include "MKLDNNRecurrentLayer.h"
 #include "paddle/utils/Logging.h"
 
+DECLARE_bool(rnn_use_batch);
+
 using namespace mkldnn;  // NOLINT
 typedef memory::format format;
 typedef inner_product_forward fc_fwd;
@@ -43,6 +45,10 @@ bool MKLDNNRecurrentLayer::init(const LayerMap& layerMap,
   ih_ = 1;
   iw_ = 1;
   reversed_ = config_.reversed();
+
+  // TODO(TJ): double check it
+  CHECK(!FLAGS_rnn_use_batch)
+      << "MKLDNN Recurrent Layer do not support the batch method";
 
   // create weight and bias
   weight_.reset(new Weight(oc_, iLayerSize_, parameters_[0], 0));
