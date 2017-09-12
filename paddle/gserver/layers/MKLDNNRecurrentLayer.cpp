@@ -101,8 +101,11 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
                                     MKLDNNMatrixPtr& bias,
                                     MKLDNNMatrixPtr& out) {
   pipeline.clear();
+  seqMul_.clear();
+  seqSum_.clear();
+  seqAct_.clear();
   CHECK_GE(seqLen_, 1U);
-  seqMul_.resize(seqLen_ - 1);
+  seqMul_.resize(seqLen_);  // only used seqLen_ - 1, but keep size enough
   seqSum_.resize(seqLen_);
   seqAct_.resize(seqLen_);
 
@@ -124,7 +127,7 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
   if (reversed_) {
     // out_end = act(in_end)
     addActOp(pipeline, seqAct_[end], seqOutVal_[end], seqInVal_[end]);
-    for (size_t i = end - 1; i >= start; --i) {
+    for (int i = end - 1; i >= (int)start; --i) {
       // out_i = W * out_(i+1)
       addMulOp(pipeline, seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i + 1]);
 
