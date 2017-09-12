@@ -123,42 +123,36 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
   size_t end = seqLen_ - 1;
   if (reversed_) {
     // out_end = act(in_end)
-    resetAct(seqAct_[end], seqOutVal_[end], seqInVal_[end]);
-    pipeline.push_back(*seqAct_[end]);
+    addActOp(pipeline, seqAct_[end], seqOutVal_[end], seqInVal_[end]);
     for (size_t i = end - 1; i >= start; --i) {
       // out_i = W * out_(i+1)
-      resetMul(seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i + 1]);
+      addMulOp(pipeline, seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i + 1]);
 
       // out_i = out_i + in_i + bias
-      resetSum(seqSum_[i], seqOutVal_[i], {seqOutVal_[i], seqInVal_[i], bias});
+      addSumOp(pipeline,
+               seqSum_[i],
+               seqOutVal_[i],
+               {seqOutVal_[i], seqInVal_[i], bias});
 
       // out_i = act(out_i)
-      resetAct(seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
-
-      // push back pipeline
-      pipeline.push_back(*seqMul_[i]);
-      pipeline.push_back(*seqSum_[i]);
-      pipeline.push_back(*seqAct_[i]);
+      addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
     }
   } else {
     // out_start = act(in_start)
-    resetAct(seqAct_[start], seqOutVal_[start], seqInVal_[start]);
-    pipeline.push_back(*seqAct_[start]);
+    addActOp(pipeline, seqAct_[start], seqOutVal_[start], seqInVal_[start]);
     for (size_t i = start + 1; i <= end; ++i) {
       // out_i = W * out_(i-1)
-      resetMul(seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i - 1]);
+      addMulOp(pipeline, seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i - 1]);
 
       // out_i = out_i + in_i + bias
       // TODO: check inplace sum, ok?
-      resetSum(seqSum_[i], seqOutVal_[i], {seqOutVal_[i], seqInVal_[i], bias});
+      addSumOp(pipeline,
+               seqSum_[i],
+               seqOutVal_[i],
+               {seqOutVal_[i], seqInVal_[i], bias});
 
       // out_i = act(out_i)
-      resetAct(seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
-
-      // push back pipeline
-      pipeline.push_back(*seqMul_[i]);
-      pipeline.push_back(*seqSum_[i]);
-      pipeline.push_back(*seqAct_[i]);
+      addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
     }
   }
 
@@ -197,10 +191,10 @@ void MKLDNNRecurrentLayer::resetSeqValue(std::vector<MKLDNNMatrixPtr>& seqIn,
   seqIn.resize(seqLen_);
   seqOut.resize(seqLen_);
   for (size_t i = 0; i < seqLen_; ++i) {
-    real* inData = inVal->getData() + i * ic_;
-    real* outData = outVal->getData() + i * oc_;
-    const MatrixPtr& in = Matrix::create(inData, 1, ic_, false, false);
-    const MatrixPtr& out = Matrix::create(outData, 1, oc_, false, false);
+    real* inData = inVal->getData() + i * bs_ * ic_;
+    real* outData = outVal->getData() + i * bs_ * oc_;
+    const MatrixPtr& in = Matrix::create(inData, bs_, ic_, false, false);
+    const MatrixPtr& out = Matrix::create(outData, bs_, oc_, false, false);
 
     // MKLDNNMatrix
     seqIn[i] = MKLDNNMatrix::create(in, {bs_, ic_}, format::nc, engine_);
@@ -208,7 +202,8 @@ void MKLDNNRecurrentLayer::resetSeqValue(std::vector<MKLDNNMatrixPtr>& seqIn,
   }
 }
 
-void MKLDNNRecurrentLayer::resetMul(std::shared_ptr<primitive>& prim,
+void MKLDNNRecurrentLayer::addMulOp(std::vector<primitive>& pipeline,
+                                    std::shared_ptr<primitive>& prim,
                                     MKLDNNMatrixPtr& dst,
                                     MKLDNNMatrixPtr& wgt,
                                     MKLDNNMatrixPtr& src) {
@@ -219,20 +214,29 @@ void MKLDNNRecurrentLayer::resetMul(std::shared_ptr<primitive>& prim,
                                       dst->getMemoryDesc());
   fc_fwd::primitive_desc mulPD = fc_fwd::primitive_desc(mulDesc, engine_);
   prim.reset(new fc_fwd(mulPD, *src, *wgt, *dst));
+  pipeline.push_back(*prim);
 }
 
-void MKLDNNRecurrentLayer::resetAct(std::shared_ptr<primitive>& prim,
+void MKLDNNRecurrentLayer::addActOp(std::vector<primitive>& pipeline,
+                                    std::shared_ptr<primitive>& prim,
                                     MKLDNNMatrixPtr& dst,
                                     MKLDNNMatrixPtr& src,
-                                    std::string actType) {}
+                                    std::string actType) {
+  //  LOG(INFO) << "act type: " << config_.active_type();  // activation_;
+  // TODO(TJ): act
+  // pipeline.push_back(*prim);
+}
 
-void MKLDNNRecurrentLayer::resetSum(std::shared_ptr<primitive>& prim,
+void MKLDNNRecurrentLayer::addSumOp(std::vector<primitive>& pipeline,
+                                    std::shared_ptr<primitive>& prim,
                                     MKLDNNMatrixPtr& dst,
                                     std::vector<MKLDNNMatrixPtr> srcs) {
   for (size_t i = 0; i < srcs.size(); ++i) {
     if (srcs[i] == nullptr) {
       continue;
     }
+    // TODO(TJ): sum
+    // pipeline.push_back(*prim);
   }
 }
 

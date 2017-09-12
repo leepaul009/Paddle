@@ -84,29 +84,30 @@ protected:
                      std::vector<MKLDNNMatrixPtr>& seqOut);
 
   /**
-   * out_i = act(in_i)
-   * out_i+1 = act(in_i+1 + W * out_i + bias)
-   */
-
-  /**
+   * add mul op to pipeline
    * dst = Wgt * src
    */
-  void resetMul(std::shared_ptr<mkldnn::primitive>& prim,
+  void addMulOp(std::vector<mkldnn::primitive>& pipeline,
+                std::shared_ptr<mkldnn::primitive>& prim,
                 MKLDNNMatrixPtr& dst,
                 MKLDNNMatrixPtr& wgt,
                 MKLDNNMatrixPtr& src);
 
   /**
+   * add sum op to pipeline
    * dst = sum(srcs)
    */
-  void resetSum(std::shared_ptr<mkldnn::primitive>& prim,
+  void addSumOp(std::vector<mkldnn::primitive>& pipeline,
+                std::shared_ptr<mkldnn::primitive>& prim,
                 MKLDNNMatrixPtr& dst,
                 std::vector<MKLDNNMatrixPtr> srcs);
 
   /**
+   * add act op to pipeline
    * dst = act(src)
    */
-  void resetAct(std::shared_ptr<mkldnn::primitive>& prim,
+  void addActOp(std::vector<mkldnn::primitive>& pipeline,
+                std::shared_ptr<mkldnn::primitive>& prim,
                 MKLDNNMatrixPtr& dst,
                 MKLDNNMatrixPtr& src,
                 std::string actType = "relu");
