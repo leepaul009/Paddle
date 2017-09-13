@@ -26,7 +26,7 @@ namespace paddle {
  */
 class MKLDNNRecurrentLayer : public MKLDNNLayer {
 protected:
-  std::vector<std::shared_ptr<mkldnn::primitive>> seqMul_;
+  std::vector<std::shared_ptr<mkldnn::primitive>> seqFc_;
   std::vector<std::shared_ptr<mkldnn::primitive>> seqSum_;
   std::vector<std::shared_ptr<mkldnn::primitive>> seqAct_;
   std::vector<MKLDNNMatrixPtr> seqInVal_;
@@ -84,14 +84,15 @@ protected:
                      std::vector<MKLDNNMatrixPtr>& seqOut);
 
   /**
-   * add mul op to pipeline
-   * dst = Wgt * src
+   * add fc op to pipeline
+   * dst = Wgt * src + bias
    */
-  void addMulOp(std::vector<mkldnn::primitive>& pipeline,
-                std::shared_ptr<mkldnn::primitive>& prim,
-                MKLDNNMatrixPtr& dst,
-                MKLDNNMatrixPtr& wgt,
-                MKLDNNMatrixPtr& src);
+  void addFcOp(std::vector<mkldnn::primitive>& pipeline,
+               std::shared_ptr<mkldnn::primitive>& prim,
+               MKLDNNMatrixPtr& dst,
+               MKLDNNMatrixPtr& wgt,
+               MKLDNNMatrixPtr& src,
+               MKLDNNMatrixPtr& bias);
 
   /**
    * add sum op to pipeline

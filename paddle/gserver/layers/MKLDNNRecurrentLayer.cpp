@@ -53,7 +53,8 @@ bool MKLDNNRecurrentLayer::init(const LayerMap& layerMap,
   // create weight and bias
   weight_.reset(new Weight(oc_, iLayerSize_, parameters_[0], 0));
   if (biasParameter_.get() != NULL) {
-    biases_.reset(new Weight(1, oc_, biasParameter_));
+    CHECK_EQ(biasParameter_->getSize(), (size_t)oc_);
+    biases_.reset(new Weight(1, oc_, biasParameter_, 0));
   }
   return true;
 }
@@ -101,11 +102,11 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
                                     MKLDNNMatrixPtr& bias,
                                     MKLDNNMatrixPtr& out) {
   pipeline.clear();
-  seqMul_.clear();
+  seqFc_.clear();
   seqSum_.clear();
   seqAct_.clear();
   CHECK_GE(seqLen_, 1U);
-  seqMul_.resize(seqLen_);  // only used seqLen_ - 1, but keep size enough
+  seqFc_.resize(seqLen_);  // only used seqLen_ - 1, but keep size enough
   seqSum_.resize(seqLen_);
   seqAct_.resize(seqLen_);
 
@@ -128,14 +129,12 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
     // out_end = act(in_end)
     addActOp(pipeline, seqAct_[end], seqOutVal_[end], seqInVal_[end]);
     for (int i = end - 1; i >= (int)start; --i) {
-      // out_i = W * out_(i+1)
-      addMulOp(pipeline, seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i + 1]);
+      // out_i = W * out_(i+1) + bias
+      addFcOp(pipeline, seqFc_[i], seqOutVal_[i], wgt, seqOutVal_[i + 1], bias);
 
-      // out_i = out_i + in_i + bias
-      addSumOp(pipeline,
-               seqSum_[i],
-               seqOutVal_[i],
-               {seqOutVal_[i], seqInVal_[i], bias});
+      // out_i = out_i + in_i
+      addSumOp(
+          pipeline, seqSum_[i], seqOutVal_[i], {seqOutVal_[i], seqInVal_[i]});
 
       // out_i = act(out_i)
       addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
@@ -144,15 +143,13 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
     // out_start = act(in_start)
     addActOp(pipeline, seqAct_[start], seqOutVal_[start], seqInVal_[start]);
     for (size_t i = start + 1; i <= end; ++i) {
-      // out_i = W * out_(i-1)
-      addMulOp(pipeline, seqMul_[i], seqOutVal_[i], wgt, seqOutVal_[i - 1]);
+      // out_i = W * out_(i-1) + bias
+      addFcOp(pipeline, seqFc_[i], seqOutVal_[i], wgt, seqOutVal_[i - 1], bias);
 
-      // out_i = out_i + in_i + bias
+      // out_i = out_i + in_i
       // TODO: check inplace sum, ok?
-      addSumOp(pipeline,
-               seqSum_[i],
-               seqOutVal_[i],
-               {seqOutVal_[i], seqInVal_[i], bias});
+      addSumOp(
+          pipeline, seqSum_[i], seqOutVal_[i], {seqOutVal_[i], seqInVal_[i]});
 
       // out_i = act(out_i)
       addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
@@ -205,18 +202,28 @@ void MKLDNNRecurrentLayer::resetSeqValue(std::vector<MKLDNNMatrixPtr>& seqIn,
   }
 }
 
-void MKLDNNRecurrentLayer::addMulOp(std::vector<primitive>& pipeline,
-                                    std::shared_ptr<primitive>& prim,
-                                    MKLDNNMatrixPtr& dst,
-                                    MKLDNNMatrixPtr& wgt,
-                                    MKLDNNMatrixPtr& src) {
-  // no bias, only mul
-  fc_fwd::desc mulDesc = fc_fwd::desc(prop_kind::forward,
-                                      src->getMemoryDesc(),
-                                      wgt->getMemoryDesc(),
-                                      dst->getMemoryDesc());
-  fc_fwd::primitive_desc mulPD = fc_fwd::primitive_desc(mulDesc, engine_);
-  prim.reset(new fc_fwd(mulPD, *src, *wgt, *dst));
+void MKLDNNRecurrentLayer::addFcOp(std::vector<primitive>& pipeline,
+                                   std::shared_ptr<primitive>& prim,
+                                   MKLDNNMatrixPtr& dst,
+                                   MKLDNNMatrixPtr& wgt,
+                                   MKLDNNMatrixPtr& src,
+                                   MKLDNNMatrixPtr& bias) {
+  auto fwdDesc = bias != nullptr ? fc_fwd::desc(prop_kind::forward,
+                                                src->getMemoryDesc(),
+                                                wgt->getMemoryDesc(),
+                                                bias->getMemoryDesc(),
+                                                dst->getMemoryDesc())
+                                 : fc_fwd::desc(prop_kind::forward,
+                                                src->getMemoryDesc(),
+                                                wgt->getMemoryDesc(),
+                                                dst->getMemoryDesc());
+
+  fc_fwd::primitive_desc fwdPD = fc_fwd::primitive_desc(fwdDesc, engine_);
+  if (bias) {
+    prim.reset(new fc_fwd(fwdPD, *src, *wgt, *bias, *dst));
+  } else {
+    prim.reset(new fc_fwd(fwdPD, *src, *wgt, *dst));
+  }
   pipeline.push_back(*prim);
 }
 
