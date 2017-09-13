@@ -113,6 +113,19 @@ protected:
                 MKLDNNMatrixPtr& src,
                 std::string actType = "relu");
 
+  /**
+   * add relu op to pipeline, actually is Leak Relu
+   * dst = relu(src)
+   * y = x                 (x > 0)
+   * y = negativeSlope * x (x <= 0)
+   * @note: negativeSlope should be -0, not 0
+   */
+  void addReluOp(std::vector<mkldnn::primitive>& pipeline,
+                 std::shared_ptr<mkldnn::primitive>& prim,
+                 MKLDNNMatrixPtr& dst,
+                 MKLDNNMatrixPtr& src,
+                 float negativeSlope = -0.f);
+
   void printSizeInfo() override {
     MKLDNNLayer::printSizeInfo();
     VLOG(MKLDNN_SIZES) << getName() << ": seqLen: " << seqLen_;

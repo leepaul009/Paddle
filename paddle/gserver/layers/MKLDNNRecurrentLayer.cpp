@@ -125,9 +125,10 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
   // reset pipeline
   size_t start = 0;
   size_t end = seqLen_ - 1;
+  std::string actType = config_.active_type();
   if (reversed_) {
     // out_end = act(in_end)
-    addActOp(pipeline, seqAct_[end], seqOutVal_[end], seqInVal_[end]);
+    addActOp(pipeline, seqAct_[end], seqOutVal_[end], seqInVal_[end], actType);
     for (int i = end - 1; i >= (int)start; --i) {
       // out_i = W * out_(i+1) + bias
       addFcOp(pipeline, seqFc_[i], seqOutVal_[i], wgt, seqOutVal_[i + 1], bias);
@@ -137,11 +138,12 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
           pipeline, seqSum_[i], seqOutVal_[i], {seqOutVal_[i], seqInVal_[i]});
 
       // out_i = act(out_i)
-      addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
+      addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i], actType);
     }
   } else {
     // out_start = act(in_start)
-    addActOp(pipeline, seqAct_[start], seqOutVal_[start], seqInVal_[start]);
+    addActOp(
+        pipeline, seqAct_[start], seqOutVal_[start], seqInVal_[start], actType);
     for (size_t i = start + 1; i <= end; ++i) {
       // out_i = W * out_(i-1) + bias
       addFcOp(pipeline, seqFc_[i], seqOutVal_[i], wgt, seqOutVal_[i - 1], bias);
@@ -152,7 +154,7 @@ void MKLDNNRecurrentLayer::resetFwd(std::vector<primitive>& pipeline,
           pipeline, seqSum_[i], seqOutVal_[i], {seqOutVal_[i], seqInVal_[i]});
 
       // out_i = act(out_i)
-      addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i]);
+      addActOp(pipeline, seqAct_[i], seqOutVal_[i], seqOutVal_[i], actType);
     }
   }
 
@@ -232,22 +234,50 @@ void MKLDNNRecurrentLayer::addActOp(std::vector<primitive>& pipeline,
                                     MKLDNNMatrixPtr& dst,
                                     MKLDNNMatrixPtr& src,
                                     std::string actType) {
-  //  LOG(INFO) << "act type: " << config_.active_type();  // activation_;
-  // TODO(TJ): act
-  // pipeline.push_back(*prim);
+  if (actType == "brelu") {
+    LOG(WARNING) << "Do not support brelu yet, will use relu instead";
+    addReluOp(pipeline, prim, dst, src);
+  } else if (actType == "relu") {
+    addReluOp(pipeline, prim, dst, src);
+  } else {
+    LOG(FATAL) << "Do not support " << actType << " yet";
+  }
+}
+
+void MKLDNNRecurrentLayer::addReluOp(std::vector<primitive>& pipeline,
+                                     std::shared_ptr<primitive>& prim,
+                                     MKLDNNMatrixPtr& dst,
+                                     MKLDNNMatrixPtr& src,
+                                     float negativeSlope) {
+  // TODO(TJ): double check the negativeSlope = -0.f right?
+  CHECK(src->getPrimitiveDesc() == dst->getPrimitiveDesc());
+  auto reluDesc = relu_forward::desc(
+      prop_kind::forward_training, src->getMemoryDesc(), negativeSlope);
+  auto pd = relu_forward::primitive_desc(reluDesc, engine_);
+  prim.reset(new relu_forward(pd, *src, *dst));
+  pipeline.push_back(*prim);
 }
 
 void MKLDNNRecurrentLayer::addSumOp(std::vector<primitive>& pipeline,
                                     std::shared_ptr<primitive>& prim,
                                     MKLDNNMatrixPtr& dst,
                                     std::vector<MKLDNNMatrixPtr> srcs) {
+  std::vector<double> scales;
+  std::vector<memory::primitive_desc> srcPDs;
+  std::vector<primitive::at> inputs;
   for (size_t i = 0; i < srcs.size(); ++i) {
     if (srcs[i] == nullptr) {
       continue;
     }
-    // TODO(TJ): sum
-    // pipeline.push_back(*prim);
+    CHECK(dst->getPrimitiveDesc() == srcs[i]->getPrimitiveDesc())
+        << "all PrimitiveDesc should be the same";
+    scales.push_back(1.0);  // do not need scale here
+    srcPDs.push_back(srcs[i]->getPrimitiveDesc());
+    inputs.push_back(*srcs[i]);
   }
+  auto pd = sum::primitive_desc(dst->getMemoryDesc(), scales, srcPDs);
+  prim.reset(new sum(pd, inputs, *dst));
+  pipeline.push_back(*prim);
 }
 
 }  // namespace paddle
