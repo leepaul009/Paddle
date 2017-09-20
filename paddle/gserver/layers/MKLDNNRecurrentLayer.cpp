@@ -249,12 +249,16 @@ void MKLDNNRecurrentLayer::addReluOp(std::vector<primitive>& pipeline,
                                      MKLDNNMatrixPtr& dst,
                                      MKLDNNMatrixPtr& src,
                                      float negativeSlope) {
-  // TODO(TJ): double check the negativeSlope = -0.f right?
   CHECK(src->getPrimitiveDesc() == dst->getPrimitiveDesc());
-  auto reluDesc = relu_forward::desc(
-      prop_kind::forward_training, src->getMemoryDesc(), negativeSlope);
-  auto pd = relu_forward::primitive_desc(reluDesc, engine_);
-  prim.reset(new relu_forward(pd, *src, *dst));
+  float alpha = negativeSlope;
+  float beta = 0.f;
+  auto reluDesc = eltwise_forward::desc(prop_kind::forward_training,
+                                        algorithm::eltwise_relu,
+                                        src->getMemoryDesc(),
+                                        alpha,
+                                        beta);
+  auto pd = eltwise_forward::primitive_desc(reluDesc, engine_);
+  prim.reset(new eltwise_forward(pd, *src, *dst));
   pipeline.push_back(*prim);
 }
 
