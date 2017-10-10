@@ -30,16 +30,9 @@ limitations under the License. */
 namespace paddle {
 
 namespace framework {
-namespace details {
-template <bool less, size_t i, typename... args>
-struct CastToPyBufferImpl;
-}
 
 class Tensor {
  public:
-  template <bool less, size_t i, typename... args>
-  friend struct details::CastToPyBufferImpl;
-
   template <typename T, size_t D, int MajorType, typename IndexType>
   friend struct EigenTensor;
 
@@ -103,6 +96,19 @@ class Tensor {
   inline void CopyFrom(const Tensor& src, const platform::Place& dst_place);
 
   /**
+   * @brief   Copy the content of an external vector to a tensor.
+   *
+   * @param[in] src   The external vector.
+   * @param[in] ctx   The device context contains place where to store.
+   *
+   * * @note    CopyFromVector assumes that the tensor has been resized
+   *            before invoking.
+   */
+  template <typename T>
+  inline void CopyFromVector(const std::vector<T>& src,
+                             const platform::Place& dst_place);
+
+  /**
    * @brief   Return the slice of the tensor.
    *
    * @param[in] begin_idx   The begin index of the slice.
@@ -115,6 +121,8 @@ class Tensor {
     PADDLE_ENFORCE_NOT_NULL(holder_, "Tensor get place() must contains holder");
     return holder_->place();
   }
+
+  std::type_index type() const { return holder_->type(); }
 
  private:
   template <typename T>
@@ -164,12 +172,6 @@ class Tensor {
 
   /*! points to dimensions of memory block. */
   DDim dims_;
-
-  /**
-   * A cache of the number of elements in a tensor.
-   * Would be 0 for an uninitialized tensor.
-   */
-  int64_t numel_;
 
   /**
    * @brief   A PlaceHolder may be shared by more than one tensor.

@@ -37,9 +37,7 @@ set(PADDLE_CAPI_INFER_LIBS
     paddle_cuda
     paddle_function
     paddle_gserver
-    paddle_proto
-    paddle_pserver
-    paddle_network)
+    paddle_proto)
 
 cc_library(paddle_capi_whole DEPS paddle_capi ${PADDLE_CAPI_INFER_LIBS})
 
@@ -62,6 +60,7 @@ if(ANDROID)
           LIBRARY DESTINATION lib/${ANDROID_ABI})
   execute_process(
     COMMAND ${GIT_EXECUTABLE} log --pretty=oneline -1
+    WORKING_DIRECTORY ${PADDLE_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_COMMITS_LIST
     RESULT_VARIABLE GIT_COMMITS_LIST_RESULT
     ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -81,8 +80,7 @@ if(ANDROID)
       )"
   )
 else(ANDROID)
-  install(TARGETS paddle_capi_whole
-          ARCHIVE DESTINATION lib)
+  install(TARGETS paddle_capi_whole ARCHIVE DESTINATION lib)
   if(NOT IOS)
     install(TARGETS paddle_capi_shared DESTINATION lib)
   endif()
