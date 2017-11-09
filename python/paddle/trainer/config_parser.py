@@ -3534,13 +3534,8 @@ class ConcatenateLayer2(LayerBase):
 
 @config_layer('recurrent')
 class RecurrentLayer(LayerBase):
-    layer_type = 'recurrent'
-
     def __init__(self, name, inputs, reversed=False, bias=True, **xargs):
-        use_mkldnn = bool(int(g_command_config_args.get("use_mkldnn", 0)))
-        if use_mkldnn:
-            self.layer_type = 'mkldnn_rnn'
-        super(RecurrentLayer, self).__init__(name, self.layer_type, 0, inputs,
+        super(RecurrentLayer, self).__init__(name, 'recurrent', 0, inputs,
                                              **xargs)
         config_assert(len(self.inputs) == 1, 'RecurrentLayer must have 1 input')
         input_layer = self.get_input_layer(0)
@@ -3550,11 +3545,6 @@ class RecurrentLayer(LayerBase):
         dims = [size, size]
         self.create_input_parameter(0, size * size, dims)
         self.create_bias_parameter(bias, self.config.size)
-
-
-@config_layer('mkldnn_rnn')
-class MkldnnRecurrentLayer(RecurrentLayer):
-    layer_type = 'mkldnn_rnn'
 
 
 @config_layer('lstmemory')
