@@ -24,6 +24,32 @@ namespace operators {
 
 using Tensor = framework::Tensor;
 
+class PoolOp : public framework::OperatorWithKernel {
+ public:
+  using framework::OperatorWithKernel::OperatorWithKernel;
+
+  void InferShape(framework::InferShapeContext* ctx) const override;
+};
+
+class PoolOpGrad : public framework::OperatorWithKernel {
+ public:
+  using framework::OperatorWithKernel::OperatorWithKernel;
+
+  void InferShape(framework::InferShapeContext* ctx) const override;
+};
+
+class Pool2dOpMaker : public framework::OpProtoAndCheckerMaker {
+ public:
+  Pool2dOpMaker(framework::OpProto* proto,
+                framework::OpAttrChecker* op_checker);
+};
+
+class Pool3dOpMaker : public framework::OpProtoAndCheckerMaker {
+ public:
+  Pool3dOpMaker(framework::OpProto* proto,
+                framework::OpAttrChecker* op_checker);
+};
+
 template <typename Place, typename T>
 class PoolKernel : public framework::OpKernel<T> {
  public:
@@ -31,12 +57,13 @@ class PoolKernel : public framework::OpKernel<T> {
     const Tensor* in_x = context.Input<Tensor>("X");
     Tensor* out = context.Output<Tensor>("Out");
 
-    std::string pooling_type = context.Attr<std::string>("poolingType");
+    std::string pooling_type = context.Attr<std::string>("pooling_type");
     std::vector<int> ksize = context.Attr<std::vector<int>>("ksize");
     std::vector<int> strides = context.Attr<std::vector<int>>("strides");
     std::vector<int> paddings = context.Attr<std::vector<int>>("paddings");
-    if (context.Attr<bool>("globalPooling")) {
+    if (context.Attr<bool>("global_pooling")) {
       for (size_t i = 0; i < ksize.size(); ++i) {
+        paddings[i] = 0;
         ksize[i] = static_cast<int>(in_x->dims()[i + 2]);
       }
     }
@@ -77,6 +104,7 @@ class PoolKernel : public framework::OpKernel<T> {
                          paddings, pool_process);
         }
       } break;
+      default: { PADDLE_THROW("Pool op only supports 2D and 3D input."); }
     }
   }
 };
@@ -91,14 +119,16 @@ class PoolGradKernel : public framework::OpKernel<T> {
         context.Input<Tensor>(framework::GradVarName("Out"));
     Tensor* in_x_grad = context.Output<Tensor>(framework::GradVarName("X"));
 
-    std::string pooling_type = context.Attr<std::string>("poolingType");
+    std::string pooling_type = context.Attr<std::string>("pooling_type");
     std::vector<int> ksize = context.Attr<std::vector<int>>("ksize");
     std::vector<int> strides = context.Attr<std::vector<int>>("strides");
     std::vector<int> paddings = context.Attr<std::vector<int>>("paddings");
 
-    if (context.Attr<bool>("globalPooling")) {
-      for (size_t i = 0; i < ksize.size(); ++i)
+    if (context.Attr<bool>("global_pooling")) {
+      for (size_t i = 0; i < ksize.size(); ++i) {
+        paddings[i] = 0;
         ksize[i] = static_cast<int>(in_x->dims()[i + 2]);
+      }
     }
 
     if (in_x_grad) {
@@ -138,6 +168,7 @@ class PoolGradKernel : public framework::OpKernel<T> {
                             *out_grad, ksize, strides, paddings, pool_process);
           }
         } break;
+        default: { PADDLE_THROW("Pool op only supports 2D and 3D input."); }
       }
     }
   }

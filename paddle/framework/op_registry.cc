@@ -44,6 +44,9 @@ static VariableNameMap ConvertOpDescVarsToVarNameMap(
 }
 
 std::unique_ptr<OperatorBase> OpRegistry::CreateOp(const OpDesc& op_desc) {
+  VLOG(1) << "CreateOp directly from OpDesc is deprecated. It should only be"
+             "used in unit tests. Use CreateOp(const OpDescBind& op_desc) "
+             "instead.";
   VariableNameMap inputs = ConvertOpDescVarsToVarNameMap(op_desc.inputs());
   VariableNameMap outputs = ConvertOpDescVarsToVarNameMap(op_desc.outputs());
   AttributeMap attrs;
@@ -57,17 +60,6 @@ std::unique_ptr<OperatorBase> OpRegistry::CreateOp(const OpDesc& op_desc) {
 std::unique_ptr<OperatorBase> OpRegistry::CreateOp(const OpDescBind& op_desc) {
   return CreateOp(op_desc.Type(), op_desc.Inputs(), op_desc.Outputs(),
                   op_desc.GetAttrMap());
-}
-
-std::vector<std::unique_ptr<OpDescBind>> OpRegistry::CreateGradOpDescs(
-    OpDescBind* op_desc) {
-  auto& info = OpInfoMap::Instance().Get(op_desc->Type());
-
-  if (info.Checker() != nullptr) {
-    info.Checker()->Check(*op_desc->MutableAttrMap());
-  }
-
-  return info.grad_op_maker_(*op_desc);
 }
 
 }  // namespace framework

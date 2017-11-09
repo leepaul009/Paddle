@@ -21,15 +21,14 @@ class ClipOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("X"),
                    "Input(X) of ClipOp should not be null.");
     PADDLE_ENFORCE(ctx->HasOutput("Out"),
                    "Output(Out) of ClipOp should not be null.");
     auto x_dims = ctx->GetInputDim("X");
-    auto max = Attr<float>("max");
-    auto min = Attr<float>("min");
+    auto max = ctx->Attrs().Get<float>("max");
+    auto min = ctx->Attrs().Get<float>("min");
     PADDLE_ENFORCE_LT(min, max, "max should be greater than min.");
     ctx->SetOutputDim("Out", x_dims);
     ctx->ShareLoD("X", /*->*/ "Out");
@@ -50,8 +49,11 @@ class ClipOpMaker : public framework::OpProtoAndCheckerMaker {
     AddAttr<AttrType>(
         "max", "(float)Maximum value, above which element is replaced by max");
     AddComment(R"DOC(
-Clip operator limits the given input within an interval. The interval is
+Clip Operator.
+
+The clip operator limits the value of given input within an interval. The interval is
 specified with arguments 'min' and 'max'.
+
 )DOC");
   }
 };
@@ -60,7 +62,6 @@ class ClipOpGrad : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("X"), "Input(X) should not be null");
     PADDLE_ENFORCE(ctx->HasInput(framework::GradVarName("Out")),

@@ -124,6 +124,11 @@ void CUDADeviceContext::Wait() const {
   PADDLE_ENFORCE(cudaStreamSynchronize(stream_));
 }
 
+void CUDADeviceContext::Finish() const {
+  Wait();
+  PADDLE_ENFORCE(cudaGetLastError());
+}
+
 Eigen::GpuDevice* CUDADeviceContext::eigen_device() const {
   return eigen_device_.get();
 }
@@ -136,7 +141,7 @@ cudnnHandle_t CUDADeviceContext::cudnn_handle() const { return cudnn_handle_; }
 
 cudaStream_t CUDADeviceContext::stream() const { return stream_; }
 
-#endif  // PADDLE_ONLY_CPU
+#endif
 
 }  // namespace platform
 }  // namespace paddle

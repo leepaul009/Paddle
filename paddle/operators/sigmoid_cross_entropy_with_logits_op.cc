@@ -23,7 +23,6 @@ class SigmoidCrossEntropyWithLogitsOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("X"), "Input(X) should be not null.");
     PADDLE_ENFORCE(ctx->HasInput("Labels"),
@@ -52,7 +51,6 @@ class SigmoidCrossEntropyWithLogitsGradOp
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("X"), "Input(X) should be not null.");
     PADDLE_ENFORCE(ctx->HasInput("Labels"),
@@ -109,26 +107,28 @@ class SigmoidCrossEntropyWithLogitsOpMaker
     AddComment(R"DOC(
 SigmoidCrossEntropyWithLogits Operator.
 
-This measures the elementwise probability error in discrete classification tasks
+This measures the element-wise probability error in classification tasks
 in which each class is independent. This can be thought of as predicting labels
-for a data-point that are not mutually exclusive. For example, a news article
-can be about politics, technology or sports at the same time or none of these.
+for a data-point, where labels are not mutually exclusive.
+For example, a news article can be about politics, technology or sports
+at the same time or none of these.
 
 The logistic loss is given as follows:
 
-       loss = -Labels * log(sigmoid(X)) - (1 - Labels) * log(1 - sigmoid(X))
+       $$loss = -Labels * \log(\sigma(X)) - (1 - Labels) * \log(1 - \sigma(X))$$
 
-We know that sigmoid(X) = (1 / (1 + exp(-X))). By substituting this we get
+We know that $$\sigma(X) = (1 / (1 + \exp(-X)))$$. By substituting this we get:
 
-       loss = X - X * Labels + log(1 + exp(-X))
+       $$loss = X - X * Labels + \log(1 + \exp(-X))$$
 
-For stability and to prevent overflow of exp(-X) when X < 0,
-we can reformulate the loss as follows:
+For stability and to prevent overflow of $$\exp(-X)$$ when X < 0,
+we reformulate the loss as follows:
 
-       loss = max(X, 0) - X * Labels + log(1 + exp(-abs(X)))
+       $$loss = \max(X, 0) - X * Labels + \log(1 + \exp(-|X|))$$
 
 Both the input `X` and `Labels` can carry the LoD (Level of Details) information.
 However the output only shares the LoD with input `X`.
+
 )DOC");
   }
 };

@@ -23,7 +23,6 @@ class MultiplexOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("Ids"), "Input(Ids) shouldn't be null.");
     PADDLE_ENFORCE(!ctx->Inputs("X").empty(),
@@ -51,9 +50,12 @@ class MultiplexOp : public framework::OperatorWithKernel {
     ctx->SetOutputDim("Out", in_dim);
   }
 
-  framework::DataType IndicateDataType(
+ protected:
+  framework::OpKernelType GetKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return framework::ToDataType(ctx.MultiInput<Tensor>("X")[0]->type());
+    return framework::OpKernelType(
+        framework::ToDataType(ctx.MultiInput<Tensor>("X")[0]->type()),
+        ctx.device_context());
   }
 };
 
@@ -66,7 +68,8 @@ class MultiplexOpMaker : public framework::OpProtoAndCheckerMaker {
     AddInput("X", "The candidate tensors of multiplex operator.")
         .AsDuplicable();
     AddOutput("Out", "The output tensor of multiplex operator.");
-    AddComment(R"DOC(Multiplex operator
+    AddComment(R"DOC(
+Multiplex Operator.
 
 Multiplex multiple tensors according to the index provided by the index tensor.
 
@@ -77,10 +80,11 @@ the (Ids[i])-th tensor.
 
 For i-th row of the output tensor:
 
-y[i] = x_{k}[i]
+$$y[i] = x_{k}[i]$$
 
-where y is the output tensor. `x_{k}` is the k-th input tensor
+where `y` is the output tensor, `x_{k}` is the k-th input tensor,
 and `k = Ids[i]`.
+
 )DOC");
   }
 };
@@ -89,7 +93,6 @@ class MultiplexGradOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(!ctx->Inputs("X").empty(), "Input(X) should not be null.");
     PADDLE_ENFORCE(!ctx->Outputs(framework::GradVarName("X")).empty(),
@@ -105,9 +108,12 @@ class MultiplexGradOp : public framework::OperatorWithKernel {
     ctx->SetOutputsDim(framework::GradVarName("X"), d_ins);
   }
 
-  framework::DataType IndicateDataType(
+ protected:
+  framework::OpKernelType GetKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return framework::ToDataType(ctx.MultiInput<Tensor>("X")[0]->type());
+    return framework::OpKernelType(
+        framework::ToDataType(ctx.MultiInput<Tensor>("X")[0]->type()),
+        ctx.device_context());
   }
 };
 
@@ -115,8 +121,9 @@ class MultiplexGradOp : public framework::OperatorWithKernel {
 }  // namespace paddle
 namespace ops = paddle::operators;
 
-REGISTER_OP(multiplex, ops::MultiplexOp, ops::MultiplexOpMaker, multiplex_grad,
-            ops::MultiplexGradOp);
+REGISTER_OPERATOR(multiplex, ops::MultiplexOp, ops::MultiplexOpMaker,
+                  paddle::framework::DefaultGradOpDescMaker<false>);
+REGISTER_OPERATOR(multiplex_grad, ops::MultiplexGradOp);
 REGISTER_OP_CPU_KERNEL(
     multiplex, ops::MultiplexCPUKernel<paddle::platform::CPUPlace, float>);
 REGISTER_OP_CPU_KERNEL(

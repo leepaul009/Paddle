@@ -22,7 +22,6 @@ class ScatterOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("Ref"),
                    "Input(Ref) of ScatterOp should not be null.");
@@ -49,9 +48,12 @@ class ScatterOp : public framework::OperatorWithKernel {
     ctx->SetOutputDim("Out", ref_dims);
   }
 
-  framework::DataType IndicateDataType(
+ protected:
+  framework::OpKernelType GetKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return framework::ToDataType(ctx.Input<Tensor>("Ref")->type());
+    return framework::OpKernelType(
+        framework::ToDataType(ctx.Input<Tensor>("Ref")->type()),
+        ctx.device_context());
   }
 };
 
@@ -59,16 +61,18 @@ class ScatterGradOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     ctx->SetOutputDim(framework::GradVarName("Updates"),
                       ctx->GetInputDim("Updates"));
     ctx->SetOutputDim(framework::GradVarName("Ref"), ctx->GetInputDim("Ref"));
   }
 
-  framework::DataType IndicateDataType(
+ protected:
+  framework::OpKernelType GetKernelType(
       const framework::ExecutionContext& ctx) const override {
-    return framework::ToDataType(ctx.Input<Tensor>("Ref")->type());
+    return framework::OpKernelType(
+        framework::ToDataType(ctx.Input<Tensor>("Ref")->type()),
+        ctx.device_context());
   }
 };
 

@@ -20,6 +20,8 @@ limitations under the License. */
 #include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "glog/logging.h"  // For VLOG()
 #include "paddle/framework/attribute.h"
 #include "paddle/framework/details/op_registry.h"
 #include "paddle/framework/framework.pb.h"
@@ -27,6 +29,7 @@ limitations under the License. */
 #include "paddle/framework/op_desc.h"
 #include "paddle/framework/operator.h"
 #include "paddle/framework/scope.h"
+#include "paddle/framework/shape_inference.h"
 
 namespace paddle {
 namespace framework {
@@ -45,18 +48,15 @@ class Registrar {
 
 template <typename... ARGS>
 struct OperatorRegistrar : public Registrar {
-  explicit OperatorRegistrar(const char* op_type) : op_type(op_type) {
+  explicit OperatorRegistrar(const char* op_type) {
     PADDLE_ENFORCE(!OpInfoMap::Instance().Has(op_type),
                    "'%s' is registered more than once.", op_type);
     static_assert(sizeof...(ARGS) != 0,
                   "OperatorRegistrar should be invoked at least by OpClass");
+    OpInfo info;
     details::OperatorRegistrarRecursive<0, false, ARGS...>(op_type, &info);
     OpInfoMap::Instance().Insert(op_type, info);
   }
-
-  const char* op_type;
-
-  OpInfo info;
 };
 
 class OpRegistry {
@@ -79,20 +79,7 @@ class OpRegistry {
 
   static std::unique_ptr<OperatorBase> CreateOp(const OpDesc& op_desc);
 
-  static std::vector<std::unique_ptr<OpDescBind>> CreateGradOpDescs(
-      OpDescBind* op_desc);
-
   static std::unique_ptr<OperatorBase> CreateOp(const OpDescBind& op_desc);
-};
-
-template <typename OpType, typename ProtoMakerType, typename GradOpType>
-class OpRegistrar : public Registrar {
- public:
-  explicit OpRegistrar(const char* op_type) { OpRegistrar(op_type, ""); }
-  OpRegistrar(const char* op_type, const char* grad_op_type) {
-    OpRegistry::RegisterOp<OpType, ProtoMakerType, GradOpType>(op_type,
-                                                               grad_op_type);
-  }
 };
 
 template <typename PlaceType, bool at_end, size_t I, typename... KernelType>
@@ -105,8 +92,7 @@ struct OpKernelRegistrarFunctor<PlaceType, false, I, KernelTypes...> {
 
   void operator()(const char* op_type) const {
     using T = typename KERNEL_TYPE::ELEMENT_TYPE;
-    OperatorWithKernel::OpKernelKey key(ToDataType(std::type_index(typeid(T))),
-                                        PlaceType());
+    OpKernelType key(ToDataType(std::type_index(typeid(T))), PlaceType());
     OperatorWithKernel::AllOpKernels()[op_type][key].reset(new KERNEL_TYPE);
 
     constexpr auto size = std::tuple_size<std::tuple<KernelTypes...>>::value;
@@ -160,18 +146,23 @@ class OpKernelRegistrar : public Registrar {
 /**
  * Macro to register Operator.
  */
-#define REGISTER_OP(op_type, op_class, op_maker_class, grad_op_type,           \
-                    grad_op_class)                                             \
-  REGISTER_OPERATOR(grad_op_type, grad_op_class);                              \
-  class _GradOpDescMaker_##grad_op_type##_                                     \
-      : public ::paddle::framework::DefaultGradOpDescMaker {                   \
-    using ::paddle::framework::DefaultGradOpDescMaker::DefaultGradOpDescMaker; \
-                                                                               \
-   protected:                                                                  \
-    virtual std::string GradOpType() const { return #grad_op_type; }           \
-  };                                                                           \
-  REGISTER_OPERATOR(op_type, op_class, _GradOpDescMaker_##grad_op_type##_,     \
+#define REGISTER_OP(op_type, op_class, op_maker_class, grad_op_type,       \
+                    grad_op_class)                                         \
+  REGISTER_OPERATOR(grad_op_type, grad_op_class);                          \
+  class _GradOpDescMaker_##grad_op_type##_                                 \
+      : public ::paddle::framework::DefaultGradOpDescMaker<true> {         \
+    using ::paddle::framework::DefaultGradOpDescMaker<                     \
+        true>::DefaultGradOpDescMaker;                                     \
+                                                                           \
+   protected:                                                              \
+    virtual std::string GradOpType() const { return #grad_op_type; }       \
+  };                                                                       \
+  REGISTER_OPERATOR(op_type, op_class, _GradOpDescMaker_##grad_op_type##_, \
                     op_maker_class);
+
+#define REGISTER_OP_WITH_KERNEL(op_type, ...)                         \
+  REGISTER_OPERATOR(op_type, ::paddle::framework::OperatorWithKernel, \
+                    ##__VA_ARGS__)
 
 #define REGISTER_OP_WITHOUT_GRADIENT(op_type, op_class, op_maker_class) \
   REGISTER_OPERATOR(op_type, op_class, op_maker_class)
@@ -234,6 +225,10 @@ class OpKernelRegistrar : public Registrar {
 #define USE_CPU_ONLY_OP(op_type) \
   USE_OP_ITSELF(op_type);        \
   USE_OP_DEVICE_KERNEL(op_type, CPU);
+
+#define USE_GPU_ONLY_OP(op_type) \
+  USE_OP_ITSELF(op_type);        \
+  USE_OP_DEVICE_KERNEL(op_type, GPU)
 
 #define USE_OP(op_type)   \
   USE_OP_ITSELF(op_type); \

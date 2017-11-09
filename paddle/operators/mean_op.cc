@@ -21,7 +21,6 @@ class MeanOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     PADDLE_ENFORCE(ctx->HasInput("X"),
                    "Input(X) of MeanOp should not be null.");
@@ -37,7 +36,11 @@ class MeanOpMaker : public framework::OpProtoAndCheckerMaker {
       : OpProtoAndCheckerMaker(proto, op_checker) {
     AddInput("X", "The input of mean op");
     AddOutput("Out", "The output of mean op");
-    AddComment(R"DOC( Mean Operator
+    AddComment(R"DOC(
+Mean Operator.
+
+Out is a scalar which is the mean of all elements in X. 
+
 )DOC");
   }
 };
@@ -46,9 +49,9 @@ class MeanGradOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
 
- protected:
   void InferShape(framework::InferShapeContext* ctx) const override {
     ctx->SetOutputDim(framework::GradVarName("X"), ctx->GetInputDim("X"));
+    ctx->ShareLoD("X", framework::GradVarName("X"));
   }
 };
 
@@ -73,7 +76,8 @@ class MeanGradMaker : public framework::SingleGradOpDescMaker {
 namespace ops = paddle::operators;
 REGISTER_OPERATOR(mean, ops::MeanOp, ops::MeanOpMaker, ops::MeanGradMaker);
 REGISTER_OPERATOR(mean_grad, ops::MeanGradOp);
-REGISTER_OP_CPU_KERNEL(mean,
-                       ops::MeanKernel<paddle::platform::CPUPlace, float>);
+REGISTER_OP_CPU_KERNEL(mean, ops::MeanKernel<paddle::platform::CPUPlace, float>,
+                       ops::MeanKernel<paddle::platform::CPUPlace, double>);
 REGISTER_OP_CPU_KERNEL(mean_grad,
-                       ops::MeanGradKernel<paddle::platform::CPUPlace, float>);
+                       ops::MeanGradKernel<paddle::platform::CPUPlace, float>,
+                       ops::MeanGradKernel<paddle::platform::CPUPlace, double>);

@@ -134,7 +134,7 @@ void CondOp::PrepareDataForSubnet(
   for (int i = 0; i < BRANCH_NUM; ++i) {
     for (auto& output : (*sub_net_op_[i]).Outputs()) {
       for (auto& var_name : output.second) {
-        sub_scopes[i]->NewVar(var_name);
+        sub_scopes[i]->Var(var_name);
       }
     }
   }
@@ -216,11 +216,12 @@ class CondOpProtoAndCheckerMaker : public framework::OpProtoAndCheckerMaker {
     AddOutput("IndexTensors", "Index Tensors contains indices for true/false");
 
     AddComment(R"DOC(
-Sample dependent Cond Operator:
-Given Cond[i] as a 1/0 vector to indicate true/false
-The equation is:
-Out[i] = subnet_t[i], if Cond[i] == true
-Out[i] = subnet_t[i], if Cond[i] == false
+Sample Dependent Conditional Operator.
+
+Given Cond[i] as a 1/0 vector to indicate true/false:
+Out[i] = subnet_true[i], if Cond[i] == true
+Out[i] = subnet_false[i], if Cond[i] == false
+
 )DOC");
   }
 };
